@@ -1,0 +1,112 @@
+[blender]
+
+[optimize]
+
+# ===== 重复关键帧去重 =====
+enable_duplicate_keyframe_prune = true
+duplicate_epsilon_frame = 0.000001
+duplicate_epsilon_value = 0.000001
+
+# ===== BEZIER→LINEAR 简化 =====
+enable_bezier_to_linear = true
+bezier_to_linear_threshold = 0.01
+
+# ===== 密集冗余关键帧去除 =====
+enable_interval_dedupe = true
+interval_dedupe_value_threshold = 0.0001
+dedupe_interval_sec = 0.2
+
+# ===== 次要关键帧剪枝 =====
+enable_minor_keyframe_prune = true
+minor_prune_allow_interpolations = ["LINEAR"]
+minor_prune_neighbor_interpolations = ["LINEAR", "CONSTANT"]
+
+# ===== Ramer-Douglas-Peucker 曲线简化 =====
+enable_rdp_simplify = true
+rdp_epsilon = 0.001
+
+# ===== 各类型 fcurve 的剪枝阈值 =====
+rotation_threshold_deg = 1.0
+location_threshold_px = 0.5
+scale_threshold = 0.01
+expression_threshold = 0.001
+other_threshold = 0.001
+
+min_keyframes_per_fcurve = 1
+
+# ===== 线性模式检测 =====
+enable_linear_pattern_detection = true
+linear_pattern_min_points = 3
+linear_pattern_frame_epsilon = 0.00001
+linear_pattern_value_epsilon = 0.00001
+keep_procedural_source_keyframes = false
+
+# ===== 输出格式精简 =====
+omit_default_interpolation = true
+omit_handles_for_linear_constant = true
+omit_kind_field = true
+omit_default_extrapolation = true
+
+# ===== 排除/过滤规则 =====
+prune_exclude_data_path_keywords = ["constraint"]
+pattern_exclude_data_path_keywords = []
+action_include_patterns = []
+action_exclude_patterns = []
+keep_empty_actions = false
+
+
+# ---- 合并参数 ----
+[merge]
+
+# Action 名称冲突解决策略:
+#   "rename"        - 重命名冲突 action，使用 rename_template 格式
+#   "keep_first"    - 保留第一个出现的 action，忽略后续同名
+#   "keep_last"     - 保留最后一个出现的 action，覆盖前面的
+#   "merge_fcurves" - 合并同名 action 的 fcurve（不同 data_path 保留，相同 data_path 后者覆盖前者）
+#   "weighted"      - 基于权重决定冲突优先级：权重最高的源保留原始名称，其余重命名
+action_conflict_strategy = "weighted"
+
+# 重命名模板，仅 action_conflict_strategy 为 "rename" 或 "weighted" 时对非优先源生效
+# 可用变量: {source} = 源文件标签, {name} = 原始 action 名称
+# 例: "{source}.{name}" → "file_A.WalkAction"
+action_rename_template = "{source}.{name}"
+
+# 对象绑定冲突解决策略:
+#   "keep_first" - 保留第一个出现的绑定
+#   "keep_last"  - 保留最后一个出现的绑定
+#   "weighted"   - 基于权重决定优先级：权重最高的源的绑定优先
+binding_conflict_strategy = "weighted"
+
+# 场景设置冲突解决策略:
+#   "keep_first" - 保留第一个源文件的场景设置
+#   "keep_last"  - 保留最后一个源文件的场景设置
+#   "union"      - 取并集：frame_start 取最小值，frame_end 取最大值，fps 取最大值
+#   "weighted"   - 等同于 union
+scene_conflict_strategy = "union"
+
+
+# ---- 任务列表 ----
+# 可定义多个 [[tasks]]，每个任务独立执行完整管线
+#
+# 源文件通过 [[tasks.sources]] 定义，每个源可指定:
+#   path           - blend 文件路径（必填）
+#   label          - 源标签，用于 rename 策略（可选，默认取文件名）
+#   weight_ranges  - 帧范围权重列表（可选，默认权重 1.0）
+#
+# weight_ranges 中每项包含:
+#   frame_start - 起始帧
+#   frame_end   - 结束帧
+#   weight      - 权重值（越高优先级越高）
+
+[[tasks]]
+
+
+# ===== 可选 - 单独指定各 toml 文件的目录 =====
+# old_toml_dir = "../tmp/old"
+# new_toml_dir = "../tmp/new"
+# report_toml_dir = "../tmp/report"
+
+# ===== 可选 - 单独指定各 toml 文件的完整路径 =====
+# old_toml = "../tmp/custom_old.toml"
+# new_toml = "../tmp/custom_new.toml"
+# report_toml = "../tmp/custom_report.toml"

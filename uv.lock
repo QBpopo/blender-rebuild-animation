@@ -1,0 +1,27 @@
+version = 1
+revision = 3
+requires-python = ">=3.14"
+
+[[package]]
+name = "blender-rebuild-animation"
+version = "0.0.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "fake-bpy-module-latest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "fake-bpy-module-latest", specifier = ">=20260308" }]
+
+[[package]]
+name = "fake-bpy-module-latest"
+version = "20260326"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/2e/b02a8fe78ee59b33566d9e11a2dd508b87c1b41d4f54667ea4459b194532/fake_bpy_module_latest-20260326.tar.gz", hash = "sha256:7bf6bd1287e93721dc2e3d392699f33f241ced2bda4cf0adc286611b9542ffbc", size = 882079, upload-time = "2026-03-26T06:58:51.956Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/a1/ea96ec7dd8f696d48f03f9ec8a2f61b9cd4405eea8d65d0541bd05a1e2bd/fake_bpy_module_latest-20260326-py3-none-any.whl", hash = "sha256:0f9361e738c5daab83135b6a67c10ccb32e6f195bcc7b0d16f7566470100fda1", size = 1023832, upload-time = "2026-03-26T06:58:50.183Z" },
+]
