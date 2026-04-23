@@ -9,6 +9,7 @@ from typing import Any
 from merge import merge_toml_files
 from old_to_new import convert_file
 from path_utils import copy_blend_file, ensure_parent, resolve_path
+from retarget import retarget_file
 from subprocess_utils import run_subprocess
 from toml_io import load_toml
 
@@ -192,6 +193,7 @@ def run_pipeline(config_path: Path) -> None:
         copy_blend_file(template_blend, new_blend)
 
         has_merge = len(resolved_sources) > 1
+        bone_map = task.get("bone_map", {})
 
         all_labels = [src["label"] for src in resolved_sources]
         all_weight_ranges = [src["weight_ranges"] for src in resolved_sources]
@@ -208,7 +210,7 @@ def run_pipeline(config_path: Path) -> None:
         print(f"new_blend : {new_blend}")
         print(f"toml_dir  : {old_toml.parent}")
 
-        step_count = 4 if has_merge else 3
+        step_count = 5 if (has_merge or bone_map) else 3
         step_num = 1
 
         source_tomls: list[Path] = []
@@ -238,6 +240,13 @@ def run_pipeline(config_path: Path) -> None:
             _run_merge_step(
                 source_tomls, old_toml, all_labels, merge_cfg, all_weight_ranges
             )
+
+        if bone_map:
+            step_num += 1
+            retargeted_toml = old_toml.parent / f"{old_toml.stem}_retargeted{old_toml.suffix}"
+            print(f"[{step_num}/{step_count}] 骨骼重映射 {bone_map} ...")
+            retarget_file(str(old_toml), str(retargeted_toml), bone_map)
+            old_toml = retargeted_toml
 
         step_num += 1
         print(f"[{step_num}/{step_count}] 优化到 new.toml ...")

@@ -1,61 +1,89 @@
 [blender]
+# Blender 可执行文件路径（必填）
+exe = ""
+
+# ===========================================================================
+# [optimize] — 动画优化参数
+# ===========================================================================
+# 控制关键帧精简算法的行为。所有 enable_* 项均可设为 false 单独关闭。
+# 算法执行顺序：
+#   1. 重复关键帧去重
+#   2. BEZIER→LINEAR 简化
+#   3. 密集冗余关键帧去除
+#   4. 次要关键帧剪枝
+#   5. Ramer-Douglas-Peucker 曲线简化
+#   6. 线性模式检测
+# ===========================================================================
 
 [optimize]
 
-# ===== 重复关键帧去重 =====
+# ----- 重复关键帧去重 -----
+# 移除帧号和数值相同的连续关键帧
 enable_duplicate_keyframe_prune = true
-duplicate_epsilon_frame = 0.000001
-duplicate_epsilon_value = 0.000001
+duplicate_epsilon_frame = 0.000001 # 帧号容差
+duplicate_epsilon_value = 0.000001 # 数值容差
 
-# ===== BEZIER→LINEAR 简化 =====
+# ----- BEZIER→LINEAR 简化 -----
+# 检测贝塞尔曲线中接近线性的段，降级插值类型并移除手柄数据
 enable_bezier_to_linear = true
-bezier_to_linear_threshold = 0.01
+bezier_to_linear_threshold = 0.01 # 偏离线性阈值，越小越保守
 
-# ===== 密集冗余关键帧去除 =====
+# ----- 密集冗余关键帧去除 -----
+# 移除时间间隔短且数值变化小的关键帧
 enable_interval_dedupe = true
-interval_dedupe_value_threshold = 0.0001
-dedupe_interval_sec = 0.2
+interval_dedupe_value_threshold = 0.0001 # 数值变化阈值
+dedupe_interval_sec = 0.2 # 最小帧间隔（秒，会乘以 fps 转为帧数）
 
-# ===== 次要关键帧剪枝 =====
+# ----- 次要关键帧剪枝 -----
+# 对 LINEAR 插值中可由前后帧精确还原的关键帧进行剪枝
 enable_minor_keyframe_prune = true
-minor_prune_allow_interpolations = ["LINEAR"]
-minor_prune_neighbor_interpolations = ["LINEAR", "CONSTANT"]
+minor_prune_allow_interpolations = ["LINEAR"] # 允许被剪枝的插值类型
+minor_prune_neighbor_interpolations = ["LINEAR", "CONSTANT"] # 邻居帧允许的插值类型
 
-# ===== Ramer-Douglas-Peucker 曲线简化 =====
+# ----- Ramer-Douglas-Peucker 曲线简化 -----
+# 经典曲线简化算法，减少关键帧数量同时保持曲线形状
 enable_rdp_simplify = true
-rdp_epsilon = 0.001
+rdp_epsilon = 0.001 # RDP 容差，越大简化越激进
 
-# ===== 各类型 fcurve 的剪枝阈值 =====
-rotation_threshold_deg = 1.0
-location_threshold_px = 0.5
-scale_threshold = 0.01
-expression_threshold = 0.001
-other_threshold = 0.001
+# ----- 各类型 fcurve 剪枝阈值 -----
+# 用于控制不同属性类型的容差阈值
+rotation_threshold_deg = 1.0 # 旋转阈值（度）
+location_threshold_px = 0.5 # 位移阈值（像素/Blender单位）
+scale_threshold = 0.01 # 缩放阈值
+expression_threshold = 0.001 # 表情/形变阈值
+other_threshold = 0.001 # 其他类型阈值
+min_keyframes_per_fcurve = 1 # 每条 fcurve 最少保留帧数
 
-min_keyframes_per_fcurve = 1
-
-# ===== 线性模式检测 =====
+# ----- 线性模式检测 -----
+# 检测等差递增/递减序列，替换为 linear_ramp 过程式模式以大幅压缩数据
 enable_linear_pattern_detection = true
-linear_pattern_min_points = 3
-linear_pattern_frame_epsilon = 0.00001
-linear_pattern_value_epsilon = 0.00001
-keep_procedural_source_keyframes = false
+linear_pattern_min_points = 3 # 最少点数才触发检测
+linear_pattern_frame_epsilon = 0.00001 # 帧步长容差
+linear_pattern_value_epsilon = 0.00001 # 数值步长容差
+keep_procedural_source_keyframes = false # 检测到模式后是否保留原始帧
 
-# ===== 输出格式精简 =====
-omit_default_interpolation = true
-omit_handles_for_linear_constant = true
-omit_kind_field = true
-omit_default_extrapolation = true
+# ----- 输出格式精简 -----
+# 控制输出 TOML 中是否省略默认值字段以减小文件体积
+omit_default_interpolation = true # 省略默认插值（BEZIER）
+omit_handles_for_linear_constant = true # LINEAR/CONSTANT 帧省略手柄数据
+omit_kind_field = true # 省略 kind 字段
+omit_default_extrapolation = true # 省略默认外推（CONSTANT）
 
-# ===== 排除/过滤规则 =====
-prune_exclude_data_path_keywords = ["constraint"]
-pattern_exclude_data_path_keywords = []
-action_include_patterns = []
-action_exclude_patterns = []
-keep_empty_actions = false
+# ----- 排除/过滤规则 -----
+# 控制哪些 fcurve 或 action 不参与优化或包含在输出中
+prune_exclude_data_path_keywords = ["constraint"] # 含这些关键词的 data_path 跳过剪枝
+pattern_exclude_data_path_keywords = [] # 含这些关键词的 data_path 跳过模式检测
+action_include_patterns = [] # Action 名称 glob 白名单（空=全部）
+action_exclude_patterns = [] # Action 名称 glob 黑名单
+keep_empty_actions = false # 是否保留优化后无 fcurve 的 action
 
 
-# ---- 合并参数 ----
+# ===========================================================================
+# [merge] — 合并参数
+# ===========================================================================
+# 控制多个源文件合并时的冲突解决策略
+# ===========================================================================
+
 [merge]
 
 # Action 名称冲突解决策略:
@@ -85,12 +113,17 @@ binding_conflict_strategy = "weighted"
 scene_conflict_strategy = "union"
 
 
-# ---- 任务列表 ----
-# 可定义多个 [[tasks]]，每个任务独立执行完整管线
+# ===========================================================================
+# [[tasks]] — 任务列表
+# ===========================================================================
+# 可定义多个 [[tasks]]，每个任务独立执行完整管线：
+#   导出 → 合并(可选) → 骨骼重映射(可
 #
 # tasks 字段:
 #   label          - 任务标签，用于生成输出目录 {label}.tmp/
 #   cache          - 是否保留每次运行输出（可选，默认 false 覆盖写入）
+#   new_blend      - 模板 blend 文件路径，用于重建动画（可选）
+#   bone_map       - 骨骼重映射字典（可选，格式见下方示例）
 #
 # 源文件通过 [[tasks.sources]] 定义，每个源可指定:
 #   path           - blend 文件路径（必填）
@@ -100,19 +133,21 @@ scene_conflict_strategy = "union"
 # weight_ranges 中每项包含:
 #   frame_start - 起始帧
 #   frame_end   - 结束帧
-#   weight      - 权重值（越高优先级越高）
+#   weight      - 权重值（越高优先级越高，0 表示不参与竞争）
+#
+# 骨骼重映射 bone_map:
+#   键为源骨骼名，值为目标骨骼名，将源骨骼的动画数据写入目标骨骼
 #
 # 输出目录结构:
 #   new_blend 同级目录/
 #     - {tasks.label}.tmp/
-#       - {tasks.sources.label}.toml         (原始导出，始终保留)
-#       - {tasks.label}.toml                 (优化后，cache=false)
-#       - {tasks.label}.{datetime}.toml      (优化后，cache=true)
-#       - {tasks.label}.report.toml          (优化报告，cache=false)
+#       - {tasks.sources.label}.toml           (原始导出，始终保留)
+#       - {tasks.label}.toml                   (优化后，cache=false)
+#       - {tasks.label}.{datetime}.toml        (优化后，cache=true)
+#       - {tasks.label}.report.toml            (优化报告，cache=false)
 #       - {tasks.label}.{datetime}.report.toml (优化报告，cache=true)
-#       - {tasks.label}.blend                (重建动画，cache=false)
-#       - {tasks.label}.{datetime}.blend     (重建动画，cache=true)
+#       - {tasks.label}.blend                  (重建动画，cache=false)
+#       - {tasks.label}.{datetime}.blend       (重建动画，cache=true)
 #
 # 若指定 new_blend，输出目录在 new_blend 同级；否则在首个源文件同级。
-
-[[tasks]]
+# ===========================================================================

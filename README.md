@@ -5,12 +5,12 @@
 ## 系统架构
 
 ```txt
-┌─────────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────────┐
-│  old.py     │     │  merge.py    │     │  old_to_new.py│     │  engine.py   │
-│  导出原始   │ ──► │  权重合并    │ ──► │  智能优化     │ ──► │  重建动画    │
-│  动画数据   │     │  冲突解决    │     │  关键帧精简   │     │  写回 blend  │
-└─────────────┘     └──────────────┘     └───────────────┘     └──────────────┘
-     .blend              old.toml            new.toml              .blend
+┌─────────────┐     ┌──────────────┐     ┌───────────────┐     ┌───────────────┐     ┌──────────────┐
+│  old.py     │     │  merge.py    │     │  retarget.py  │     │  old_to_new.py│     │  engine.py   │
+│  导出原始   │ ──► │  权重合并    │ ──► │  骨骼重映射   │ ──► │  智能优化     │ ──► │  重建动画    │
+│  动画数据   │     │  冲突解决    │     │  (可选)       │     │  关键帧精简   │     │  写回 blend  │
+└─────────────┘     └──────────────┘     └───────────────┘     └───────────────┘     └──────────────┘
+     .blend              old.toml         old.toml/new.toml        new.toml              .blend
 ```
 
 **完整流程由 `main.py` 编排，通过 `config.toml` 配置。**
@@ -22,6 +22,7 @@
 | `main.py` | Python | 管线入口，编排完整流程 |
 | `old.py` | Blender | 从 `.blend` 导出原始动画数据到 `*_old.toml` |
 | `merge.py` | Python | 合并多个 `old.toml`，支持权重策略与多种冲突解决方式 |
+| `retarget.py` | Python | 骨骼重映射，将动画数据从源骨骼重定向到目标骨骼 |
 | `old_to_new.py` | Python | 将 `old.toml` 优化为 `new.toml`，包含多种关键帧精简算法 |
 | `engine.py` | Blender | 从 `new.toml` 重建动画并写回 `.blend` |
 | `config.toml` | — | 全局配置文件 |
@@ -85,6 +86,7 @@ blender --background model.blend --python engine.py -- --input new.toml --output
 | `label` | string | 是 | 任务标签，用于生成输出目录 `{label}.tmp/` |
 | `new_blend` | string | 否 | 模板 blend 文件路径，用于重建动画 |
 | `cache` | bool | 否 | 是否保留每次运行输出，默认 `false`（覆盖写入） |
+| `bone_map` | object | 否 | 骨骼重映射字典，将源骨骼名映射到目标骨骼名 |
 
 ### `[[tasks.sources]]` — 源文件定义
 
@@ -187,6 +189,31 @@ extra_source_labels = ["label_b"]
 ```
 
 旧格式仍可使用，但 `label` 字段必填。旧格式无权重功能（默认权重 1.0）。新旧格式可在不同 task 中混合使用。
+
+### 骨骼重映射（Bone Retargeting）
+
+通过 `bone_map` 配置项，可以在导出后将动画数据从源骨骼重定向到目标骨骼，适用于跨角色动画迁移或骨骼重命名场景。
+
+```toml
+[[tasks]]
+label = "retarget_demo"
+new_blend = "../tmp/target.blend"
+
+[tasks.bone_map]
+COG = "HEAD"
+"hand_ik.L" = "ARC"
+[[tasks.sources]]
+path = "../tmp/source.blend"
+label = "source"
+```
+
+配置说明：
+- `bone_map` 是一个键值对字典，键为源骨骼名，值为目标骨骼名
+- 重映射在导出后、优化前执行，修改 TOML 中的 `data_path` 字段
+- 未指定的骨骼保持原名不变
+- 支持任意数量的骨骼映射
+
+上例会将 `source.blend` 中 `COG` 骨骼的动画数据写入 `target.blend` 的 `HEAD` 骨骼，`hand_ik.L` 骨骼的动画数据写入 `ARC` 骨骼。
 
 ### `[merge]`
 
