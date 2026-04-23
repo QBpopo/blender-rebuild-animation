@@ -18,7 +18,7 @@ def _clear_all_animation() -> None:
     def clear_anim_data_keep_drivers(anim_data: Any) -> None:
         if not anim_data:
             return
-        if hasattr(anim_data, "action_slot") and anim_data.action is not None:
+        if hasattr(anim_data, "action_slot"):
             anim_data.action_slot = None
         anim_data.action = None
         nla_tracks = getattr(anim_data, "nla_tracks", None)

@@ -196,9 +196,10 @@ def _merge_bindings(
                     seen[key] = remapped
                     seen_source_idx[key] = source_idx
                 else:
+                    prev_source = seen_source_idx[key]
                     prev_weight = _total_source_weight(
-                        source_weights[seen_source_idx[key]]
-                        if seen_source_idx[key] < len(source_weights)
+                        source_weights[prev_source]
+                        if prev_source < len(source_weights)
                         else None
                     )
                     if cur_weight > prev_weight:

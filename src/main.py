@@ -176,6 +176,8 @@ def _run_merge_step(
 def run_pipeline(config_path: Path) -> None:
     config = load_toml(config_path)
     blender_exe = resolve_path(config_path.parent, config["blender"]["exe"])
+    if not blender_exe.exists():
+        raise FileNotFoundError(f"Blender 可执行文件不存在: {blender_exe}")
     src_dir = Path(__file__).resolve().parent
 
     optimize_cfg = config.get("optimize", {})

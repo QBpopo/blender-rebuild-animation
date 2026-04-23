@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,8 @@ def _format_scalar(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return "0.0"
         if value.is_integer():
             return f"{value:.1f}"
         return f"{value:.10g}"
