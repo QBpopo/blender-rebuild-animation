@@ -241,7 +241,7 @@ def _merge_actions(
     result: list[dict[str, Any]] = []
     action_name_map: dict[str, dict[str, str]] = {}
     existing_names: set[str] = set()
-    existing_by_name: dict[str, dict[str, Any]] = {}
+    existing_by_name: dict[str, tuple[int, dict[str, Any]]] = {}
 
     for source_idx, action in items:
         source_label = (
@@ -269,7 +269,7 @@ def _merge_actions(
 
         if resolved_name in existing_names:
             if strategy == "merge_fcurves":
-                existing = existing_by_name[resolved_name]
+                existing_idx, existing = existing_by_name[resolved_name]
                 existing_fcurves = existing.get("fcurves", [])
                 new_fcurves = action.get("fcurves", [])
                 existing_keys = {
@@ -281,12 +281,12 @@ def _merge_actions(
                     if fc_key not in existing_keys:
                         existing_fcurves.append(copy.deepcopy(fc))
                     else:
-                        for idx, efc in enumerate(existing_fcurves):
+                        for existing_fc_idx, efc in enumerate(existing_fcurves):
                             if (
                                 efc.get("data_path"),
                                 efc.get("array_index"),
                             ) == fc_key:
-                                existing_fcurves[idx] = copy.deepcopy(fc)
+                                existing_fcurves[existing_fc_idx] = copy.deepcopy(fc)
                                 break
 
                 old_range = existing.get("frame_range", [1.0, 1.0])
@@ -296,27 +296,23 @@ def _merge_actions(
                     max(float(old_range[1]), float(new_range[1])),
                 ]
             elif strategy == "keep_last":
-                for i, existing in enumerate(result):
-                    if existing.get("name") == resolved_name:
-                        new_action = copy.deepcopy(action)
-                        new_action["name"] = resolved_name
-                        result[i] = new_action
-                        existing_by_name[resolved_name] = new_action
-                        break
+                existing_idx, existing = existing_by_name[resolved_name]
+                new_action = copy.deepcopy(action)
+                new_action["name"] = resolved_name
+                result[existing_idx] = new_action
+                existing_by_name[resolved_name] = (existing_idx, new_action)
             elif strategy == "weighted" and is_dominant:
-                for i, existing in enumerate(result):
-                    if existing.get("name") == resolved_name:
-                        new_action = copy.deepcopy(action)
-                        new_action["name"] = resolved_name
-                        result[i] = new_action
-                        existing_by_name[resolved_name] = new_action
-                        break
+                existing_idx, existing = existing_by_name[resolved_name]
+                new_action = copy.deepcopy(action)
+                new_action["name"] = resolved_name
+                result[existing_idx] = new_action
+                existing_by_name[resolved_name] = (existing_idx, new_action)
         else:
             new_action = copy.deepcopy(action)
             new_action["name"] = resolved_name
             result.append(new_action)
             existing_names.add(resolved_name)
-            existing_by_name[resolved_name] = new_action
+            existing_by_name[resolved_name] = (len(result) - 1, new_action)
 
     return result, action_name_map
 

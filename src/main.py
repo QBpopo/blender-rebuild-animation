@@ -61,6 +61,9 @@ def _normalize_task_sources(
 def _build_task_paths(
     config_path: Path, task: dict[str, Any], sources: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    if not sources:
+        raise ValueError("构建任务路径失败：sources 列表为空")
+
     task_label = task.get("label", "task")
     use_cache = bool(task.get("cache", False))
     dt = datetime.now().strftime("%Y%m%d_%H%M%S")

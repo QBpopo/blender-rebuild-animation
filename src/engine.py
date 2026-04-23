@@ -180,9 +180,10 @@ def rebuild_from_new_toml(
         if hasattr(action, "fcurves"):
             for fc in list(action.fcurves):
                 action.fcurves.remove(fc)
+        frame_range = action_data.get("frame_range", [1.0, 1.0])
         action.frame_range = (
-            float(action_data.get("frame_range", [1.0, 1.0])[0]),
-            float(action_data.get("frame_range", [1.0, 1.0])[1]),
+            float(frame_range[0]),
+            float(frame_range[1]),
         )
         action_index[action_data["name"]] = action
 
