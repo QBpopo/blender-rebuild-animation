@@ -13,6 +13,8 @@ def run_subprocess(args: list[str], cwd: str | Path | None = None) -> None:
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.stdout:
             print(result.stdout, end="", flush=True)

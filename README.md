@@ -76,15 +76,45 @@ blender --background model.blend --python engine.py -- --input new.toml --output
 |----|------|------|------|
 | `exe` | string | 是 | Blender 可执行文件绝对路径 |
 
-### `[[tasks.sources]]` — 源文件定义（新格式）
+### `[[tasks]]` — 任务定义
+
+每个 `[[tasks]]` 定义一个独立任务，执行完整管线。
+
+| 键 | 类型 | 必填 | 说明 |
+|----|------|------|------|
+| `label` | string | 是 | 任务标签，用于生成输出目录 `{label}.tmp/` |
+| `new_blend` | string | 否 | 模板 blend 文件路径，用于重建动画 |
+| `cache` | bool | 否 | 是否保留每次运行输出，默认 `false`（覆盖写入） |
+
+### `[[tasks.sources]]` — 源文件定义
 
 每个 `[[tasks.sources]]` 定义一个源 blend 文件。
 
 | 键 | 类型 | 必填 | 说明 |
 |----|------|------|------|
 | `path` | string | 是 | blend 文件路径 |
-| `label` | string | 否 | 源标签，用于 rename 策略时生成新名称，默认取文件名 |
+| `label` | string | 是 | 源标签，用于输出文件命名 |
 | `weight_ranges` | array | 否 | 帧范围权重列表，不指定时默认权重 1.0 |
+
+#### 输出目录结构
+
+运行后会在 `new_blend` 同级目录下生成（未指定 `new_blend` 时为首个源文件同级目录）：
+
+```
+{tasks.label}.tmp/
+  - {tasks.sources.label}.toml                    (原始导出)
+  - {tasks.label}.toml                             (优化后，cache=false)
+  - {tasks.label}.{datetime}.toml                  (优化后，cache=true)
+  - {tasks.label}.report.toml                      (优化报告，cache=false)
+  - {tasks.label}.{datetime}.report.toml           (优化报告，cache=true)
+  - {tasks.label}.blend                            (重建动画，cache=false)
+  - {tasks.label}.{datetime}.blend                 (重建动画，cache=true)
+```
+
+- **`cache = false`**（默认）：每次运行覆盖写入，不会产生 `.blend1` 备份文件
+- **`cache = true`**：保留历史输出，文件名带时间后缀 `{datetime}`
+
+例如 `label = "walk"` 的任务，源标签为 `charA`，会产生 `walk.tmp/charA.toml`（原始导出）和 `walk.tmp/walk.blend`（覆盖模式）或 `walk.tmp/walk.20260423_143025.blend`（缓存模式）等文件。
 
 #### `weight_ranges` 每项
 
@@ -111,8 +141,13 @@ blender --background model.blend --python engine.py -- --input new.toml --output
 **示例**：
 
 ```toml
+[[tasks]]
+label = "merge_demo"
+cache = true
+
 [[tasks.sources]]
 path = "../draft/a.blend"
+label = "charA"
 
 [[tasks.sources.weight_ranges]]
 frame_start = 0
@@ -126,6 +161,7 @@ weight = 0
 
 [[tasks.sources]]
 path = "../draft/b.blend"
+label = "charB"
 
 [[tasks.sources.weight_ranges]]
 frame_start = 0
@@ -144,12 +180,13 @@ weight = 4
 
 ```toml
 [[tasks]]
+label = "my_task"
 old_blend = "../draft/a.blend"
 extra_old_blends = ["../draft/b.blend"]
 extra_source_labels = ["label_b"]
 ```
 
-旧格式仍可使用，但无权重功能（默认权重 1.0）。新旧格式可在不同 task 中混合使用。
+旧格式仍可使用，但 `label` 字段必填。旧格式无权重功能（默认权重 1.0）。新旧格式可在不同 task 中混合使用。
 
 ### `[merge]`
 

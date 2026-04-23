@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from merge import merge_toml_files
 from old_to_new import convert_file
-from path_utils import copy_blend_file, ensure_parent, resolve_path, stem_with_suffix
+from path_utils import copy_blend_file, ensure_parent, resolve_path
 from subprocess_utils import run_subprocess
 from toml_io import load_toml
 
@@ -57,64 +58,37 @@ def _normalize_task_sources(
     return sources
 
 
-def _resolve_task_generated_file(
-    config_path: Path,
-    task: dict[str, Any],
-    file_key: str,
-    dir_key: str,
-    default_dir: Path,
-    default_name: str,
-) -> Path:
-    if task.get(file_key):
-        return resolve_path(config_path.parent, task[file_key])
-
-    if task.get(dir_key):
-        target_dir = resolve_path(config_path.parent, task[dir_key])
-    else:
-        target_dir = default_dir
-    return target_dir / default_name
-
-
 def _build_task_paths(
     config_path: Path, task: dict[str, Any], sources: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    first_source_path = sources[0]["path"]
-    default_toml_dir = first_source_path.parent / f"{first_source_path.stem}_tmp"
-    if task.get("output_dir"):
-        default_toml_dir = resolve_path(config_path.parent, task["output_dir"])
+    task_label = task.get("label", "task")
+    use_cache = bool(task.get("cache", False))
+    dt = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if "new_blend" in task and task["new_blend"]:
-        new_blend = resolve_path(config_path.parent, task["new_blend"])
+        template_blend = resolve_path(config_path.parent, task["new_blend"])
+        output_base = template_blend.parent / f"{task_label}.tmp"
     else:
-        new_blend = stem_with_suffix(first_source_path, "_new", ".blend")
+        first_source_path = sources[0]["path"]
+        template_blend = first_source_path
+        output_base = first_source_path.parent / f"{task_label}.tmp"
 
-    old_toml = _resolve_task_generated_file(
-        config_path,
-        task,
-        "old_toml",
-        "old_toml_dir",
-        default_toml_dir,
-        f"{first_source_path.stem}_old.toml",
-    )
-    new_toml = _resolve_task_generated_file(
-        config_path,
-        task,
-        "new_toml",
-        "new_toml_dir",
-        default_toml_dir,
-        f"{first_source_path.stem}_new.toml",
-    )
-    report_toml = _resolve_task_generated_file(
-        config_path,
-        task,
-        "report_toml",
-        "report_toml_dir",
-        default_toml_dir,
-        f"{first_source_path.stem}_report.toml",
-    )
+    first_source_label = sources[0]["label"]
+
+    old_toml = output_base / f"{first_source_label}.toml"
+
+    if use_cache:
+        new_toml = output_base / f"{task_label}.{dt}.toml"
+        report_toml = output_base / f"{task_label}.{dt}.report.toml"
+        new_blend = output_base / f"{task_label}.{dt}.blend"
+    else:
+        new_toml = output_base / f"{task_label}.toml"
+        report_toml = output_base / f"{task_label}.report.toml"
+        new_blend = output_base / f"{task_label}.blend"
 
     return {
         "sources": sources,
+        "template_blend": template_blend,
         "new_blend": new_blend,
         "old_toml": old_toml,
         "new_toml": new_toml,
@@ -193,6 +167,7 @@ def run_pipeline(config_path: Path) -> None:
 
         task_info = _build_task_paths(config_path, task, sources)
         resolved_sources = task_info["sources"]
+        template_blend = task_info["template_blend"]
         new_blend = task_info["new_blend"]
         old_toml = task_info["old_toml"]
         new_toml = task_info["new_toml"]
@@ -202,8 +177,16 @@ def run_pipeline(config_path: Path) -> None:
             if not src["path"].exists():
                 raise FileNotFoundError(f"源文件不存在: {src['path']}")
 
-        if not new_blend.exists():
-            copy_blend_file(resolved_sources[0]["path"], new_blend)
+        if not template_blend.exists():
+            raise FileNotFoundError(f"模板文件不存在: {template_blend}")
+
+        if not task.get("cache", False):
+            if new_blend.exists():
+                new_blend.unlink()
+            backup_blend = new_blend.parent / f"{new_blend.name}1"
+            if backup_blend.exists():
+                backup_blend.unlink()
+        copy_blend_file(template_blend, new_blend)
 
         has_merge = len(resolved_sources) > 1
 
@@ -228,14 +211,22 @@ def run_pipeline(config_path: Path) -> None:
         source_tomls: list[Path] = []
         for src_idx, src in enumerate(resolved_sources):
             if has_merge:
-                toml_path = old_toml.parent / f"{src['path'].stem}_old.toml"
-                print(
-                    f"[{step_num}/{step_count}] 导出源 {src_idx + 1}/{len(resolved_sources)}: {src['path'].name} ..."
-                )
+                toml_path = old_toml.parent / f"{src['label']}_old.toml"
             else:
                 toml_path = old_toml
-                print(f"[{step_num}/{step_count}] 导出 old.toml ...")
-            _run_old_export(blender_exe, src_dir, src["path"], toml_path)
+
+            if toml_path.exists():
+                print(
+                    f"[{step_num}/{step_count}] 跳过导出（已存在 {toml_path.name}）"
+                )
+            else:
+                if has_merge:
+                    print(
+                        f"[{step_num}/{step_count}] 导出源 {src_idx + 1}/{len(resolved_sources)}: {src['path'].name} ..."
+                    )
+                else:
+                    print(f"[{step_num}/{step_count}] 导出 old.toml ...")
+                _run_old_export(blender_exe, src_dir, src["path"], toml_path)
             source_tomls.append(toml_path)
 
         if has_merge:

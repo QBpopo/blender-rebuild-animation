@@ -88,25 +88,31 @@ scene_conflict_strategy = "union"
 # ---- 任务列表 ----
 # 可定义多个 [[tasks]]，每个任务独立执行完整管线
 #
+# tasks 字段:
+#   label          - 任务标签，用于生成输出目录 {label}.tmp/
+#   cache          - 是否保留每次运行输出（可选，默认 false 覆盖写入）
+#
 # 源文件通过 [[tasks.sources]] 定义，每个源可指定:
 #   path           - blend 文件路径（必填）
-#   label          - 源标签，用于 rename 策略（可选，默认取文件名）
+#   label          - 源标签，用于输出文件命名（必填）
 #   weight_ranges  - 帧范围权重列表（可选，默认权重 1.0）
 #
 # weight_ranges 中每项包含:
 #   frame_start - 起始帧
 #   frame_end   - 结束帧
 #   weight      - 权重值（越高优先级越高）
+#
+# 输出目录结构:
+#   new_blend 同级目录/
+#     - {tasks.label}.tmp/
+#       - {tasks.sources.label}.toml         (原始导出，始终保留)
+#       - {tasks.label}.toml                 (优化后，cache=false)
+#       - {tasks.label}.{datetime}.toml      (优化后，cache=true)
+#       - {tasks.label}.report.toml          (优化报告，cache=false)
+#       - {tasks.label}.{datetime}.report.toml (优化报告，cache=true)
+#       - {tasks.label}.blend                (重建动画，cache=false)
+#       - {tasks.label}.{datetime}.blend     (重建动画，cache=true)
+#
+# 若指定 new_blend，输出目录在 new_blend 同级；否则在首个源文件同级。
 
 [[tasks]]
-
-
-# ===== 可选 - 单独指定各 toml 文件的目录 =====
-# old_toml_dir = "../tmp/old"
-# new_toml_dir = "../tmp/new"
-# report_toml_dir = "../tmp/report"
-
-# ===== 可选 - 单独指定各 toml 文件的完整路径 =====
-# old_toml = "../tmp/custom_old.toml"
-# new_toml = "../tmp/custom_new.toml"
-# report_toml = "../tmp/custom_report.toml"
