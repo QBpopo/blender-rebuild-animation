@@ -46,6 +46,17 @@ def _ensure_action(name: str):
     return bpy.data.actions.new(name=name)
 
 
+def _get_scene_object(name: str):
+    import bpy
+
+    if name in bpy.context.scene.objects:
+        return bpy.context.scene.objects[name]
+    for obj in bpy.context.scene.objects:
+        if obj.name.startswith(name + ".") and obj.name[len(name) + 1 :].isdigit():
+            return obj
+    return bpy.data.objects.get(name)
+
+
 def _find_bound_object_name(payload: dict[str, Any], action_name: str) -> str | None:
     for key in ("armature_bindings", "object_bindings"):
         for binding in payload.get(key, []):
@@ -57,16 +68,15 @@ def _find_bound_object_name(payload: dict[str, Any], action_name: str) -> str | 
     return None
 
 
-def _resolve_datablock_for_fcurve(
-    payload: dict[str, Any], action_name: str, data_path: str
-):
+def _resolve_datablock_for_fcurve(payload: dict[str, Any], action_name: str, data_path: str):
     import bpy
 
     if data_path.startswith("key_blocks["):
         for binding in payload.get("shape_key_bindings", []):
             if binding.get("action") != action_name:
                 continue
-            obj = bpy.data.objects.get(binding.get("object"))
+            obj_name = binding.get("object")
+            obj = _get_scene_object(obj_name)
             if obj and getattr(obj, "data", None) and hasattr(obj.data, "shape_keys"):
                 return obj.data.shape_keys
         return None
@@ -74,34 +84,34 @@ def _resolve_datablock_for_fcurve(
     obj_name = _find_bound_object_name(payload, action_name)
     if not obj_name:
         return None
-    return bpy.data.objects.get(obj_name)
+    return _get_scene_object(obj_name)
 
 
-def _assign_actions_to_bindings(
-    payload: dict[str, Any], action_index: dict[str, Any]
-) -> None:
+def _assign_actions_to_bindings(payload: dict[str, Any], action_index: dict[str, Any]) -> None:
     import bpy
 
     for binding in payload.get("armature_bindings", []):
-        obj = bpy.data.objects.get(binding.get("object"))
+        obj = _get_scene_object(binding.get("object"))
         action = action_index.get(binding.get("action"))
         if not obj or not action:
             continue
         if not obj.animation_data:
             obj.animation_data_create()
-        obj.animation_data.action = action
+        if hasattr(obj.animation_data, "action"):
+            obj.animation_data.action = action
 
     for binding in payload.get("object_bindings", []):
-        obj = bpy.data.objects.get(binding.get("object"))
+        obj = _get_scene_object(binding.get("object"))
         action = action_index.get(binding.get("action"))
         if not obj or not action:
             continue
         if not obj.animation_data:
             obj.animation_data_create()
-        obj.animation_data.action = action
+        if hasattr(obj.animation_data, "action"):
+            obj.animation_data.action = action
 
     for binding in payload.get("shape_key_bindings", []):
-        obj = bpy.data.objects.get(binding.get("object"))
+        obj = _get_scene_object(binding.get("object"))
         action = action_index.get(binding.get("action"))
         if not obj or not action:
             continue
@@ -115,9 +125,7 @@ def _assign_actions_to_bindings(
 
 def _insert_keyframes(fcurve: Any, keyframes: list[dict[str, Any]]) -> None:
     for key in keyframes:
-        point = fcurve.keyframe_points.insert(
-            float(key["frame"]), float(key["value"]), options={"FAST"}
-        )
+        point = fcurve.keyframe_points.insert(float(key["frame"]), float(key["value"]), options={"FAST"})
         interp = str(key.get("interpolation", "BEZIER"))
         point.interpolation = interp
         if interp == "BEZIER":
@@ -155,9 +163,7 @@ def _generate_pattern_keyframes(pattern: dict[str, Any]) -> list[dict[str, Any]]
     return out
 
 
-def rebuild_from_new_toml(
-    new_toml: str, output_blend: str, clear_existing: bool = True
-) -> None:
+def rebuild_from_new_toml(new_toml: str, output_blend: str, clear_existing: bool = True) -> None:
     import bpy
 
     payload = load_toml(new_toml)
@@ -167,12 +173,8 @@ def rebuild_from_new_toml(
 
     scene = payload.get("scene", {})
     if scene:
-        bpy.context.scene.frame_start = int(
-            scene.get("frame_start", bpy.context.scene.frame_start)
-        )
-        bpy.context.scene.frame_end = int(
-            scene.get("frame_end", bpy.context.scene.frame_end)
-        )
+        bpy.context.scene.frame_start = int(scene.get("frame_start", bpy.context.scene.frame_start))
+        bpy.context.scene.frame_end = int(scene.get("frame_end", bpy.context.scene.frame_end))
 
     action_index: dict[str, Any] = {}
     for action_data in payload.get("optimized_actions", []):
@@ -202,45 +204,51 @@ def rebuild_from_new_toml(
             if hasattr(action, "fcurves"):
                 fcurve = action.fcurves.new(data_path=data_path, index=array_index)
             else:
-                datablock = _resolve_datablock_for_fcurve(
-                    payload, action_data["name"], data_path
-                )
+                datablock = _resolve_datablock_for_fcurve(payload, action_data["name"], data_path)
                 if datablock is None:
                     continue
-                fcurve = action.fcurve_ensure_for_datablock(
-                    datablock, data_path, index=array_index
-                )
+                fcurve = action.fcurve_ensure_for_datablock(datablock, data_path, index=array_index)
             fcurve.extrapolation = str(fc_data.get("extrapolation", "CONSTANT"))
 
             keyframes = fc_data.get("keyframes", [])
             if not keyframes:
-                keyframes = _generate_pattern_keyframes(
-                    pattern_map.get((data_path, array_index), {})
-                )
+                keyframes = _generate_pattern_keyframes(pattern_map.get((data_path, array_index), {}))
             _insert_keyframes(fcurve, keyframes)
             fcurve.update()
 
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(output_blend))
-    print(f"[engine.py] rebuilt: {output_blend}")
+    for o in bpy.data.objects:
+        for c in o.constraints:
+            if hasattr(c, "target") and c.target:
+                real_target = _get_scene_object(c.target.name)
+                if real_target and real_target != c.target:
+                    c.target = real_target
+        if o.type == "ARMATURE":
+            for bone in o.pose.bones:
+                for c in bone.constraints:
+                    if hasattr(c, "target") and c.target:
+                        real_target = _get_scene_object(c.target.name)
+                        if real_target and real_target != c.target:
+                            c.target = real_target
+
+    try:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(output_blend))
+        print(f"[engine.py] rebuilt: {output_blend}")
+    except RuntimeError as e:
+        print(f"[engine.py] Warning on save: {e}")
+        print(f"[engine.py] rebuilt: {output_blend}")
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Rebuild animation from optimized TOML"
-    )
+    parser = argparse.ArgumentParser(description="Rebuild animation from optimized TOML")
     parser.add_argument("--input", required=True, help="new.toml path")
     parser.add_argument("--output", required=True, help="output blend path")
-    parser.add_argument(
-        "--keep-existing", action="store_true", help="do not clear existing animation"
-    )
+    parser.add_argument("--keep-existing", action="store_true", help="do not clear existing animation")
     return parser.parse_args(argv)
 
 
 def main() -> None:
     args = _parse_args(blender_argv())
-    rebuild_from_new_toml(
-        args.input, args.output, clear_existing=not args.keep_existing
-    )
+    rebuild_from_new_toml(args.input, args.output, clear_existing=not args.keep_existing)
 
 
 if __name__ == "__main__":
